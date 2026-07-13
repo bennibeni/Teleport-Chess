@@ -1,0 +1,24 @@
+{
+  "name": "teleport-chess",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Two-player chess with a teleport variant, playable over a shared room link. Deploys on Vercel with Redis (Upstash) for shared game state.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.38.0",
+    "chess.js": "^1.4.0",
+    "next": "15.5.20",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}
