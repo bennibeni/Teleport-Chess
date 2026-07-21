@@ -4,9 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Chess, type Square } from "chess.js";
 import { applyTeleportMove } from "../../../lib/chess-teleport";
-import { BOARD_THEMES, PIECE_SETS, findBoardTheme, findPieceSet, type PieceSet } from "../../../lib/chessTheme";
+import { BOARD_THEMES, PIECE_SETS, findBoardTheme, findPieceSet } from "../../../lib/chessTheme";
 import { Piece } from "../../../components/Piece";
-import { PieceIcon } from "../../../components/PieceIcons";
 
 interface PublicGameState {
   id: string;
@@ -60,40 +59,18 @@ function cleanInviteLink(): string {
   return url.toString();
 }
 
-// SAN-like move strings start with an uppercase piece letter (N, B, R, Q, K)
-// for every piece except pawns, which have none (e.g. "e4", "exd5"). Castling
+// SAN move strings start with an uppercase piece letter (N, B, R, Q, K) for
+// every piece except pawns, which have none (e.g. "e4", "exd5"). Castling
 // ("O-O" / "O-O-O") and this app's teleport notation ("e2-e4 (teleport)")
 // don't carry a piece letter either, so they pass through unchanged.
-const PIECE_LETTER_TO_ICON_TYPE: Record<string, string> = { N: "n", B: "b", R: "r", Q: "q", K: "k" };
+// Here we translate the English letter to its Italian equivalent:
+// N -> C (Cavallo), B -> A (Alfiere), R -> T (Torre), Q -> D (Donna), K -> R (Re).
+const PIECE_LETTER_IT: Record<string, string> = { N: "C", B: "A", R: "T", Q: "D", K: "R" };
 
-function renderMoveNotation(entry: string, moverColor: "w" | "b", pieceSet: PieceSet) {
+function renderMoveNotation(entry: string): string {
   const match = entry.match(/^([NBRQK])/);
   if (!match) return entry;
-
-  const iconType = PIECE_LETTER_TO_ICON_TYPE[match[1]];
-  const rest = entry.slice(1);
-  const fill = moverColor === "w" ? pieceSet.fillW : pieceSet.fillB;
-
-  return (
-    <>
-      <span
-        className="move-piece-icon"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "1.15em",
-          height: "1.15em",
-          verticalAlign: "-0.22em",
-          borderRadius: "3px",
-          background: "rgba(127, 127, 127, 0.18)",
-        }}
-      >
-        <PieceIcon type={iconType} fill={fill} stroke={pieceSet.stroke} />
-      </span>
-      {rest}
-    </>
-  );
+  return PIECE_LETTER_IT[match[1]] + entry.slice(1);
 }
 
 export default function GamePage() {
@@ -485,7 +462,7 @@ export default function GamePage() {
                 ? state.history.map((entry, i) => (
                     <span key={i}>
                       {i % 2 === 0 ? `${i / 2 + 1}. ` : ""}
-                      {renderMoveNotation(entry, i % 2 === 0 ? "w" : "b", pieceSet)}{" "}
+                      {renderMoveNotation(entry)}{" "}
                     </span>
                   ))
                 : "No moves yet"}
