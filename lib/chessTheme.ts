@@ -10,11 +10,14 @@ export interface BoardTheme {
   coord: string; // rank/file label color
 }
 
+// NOTE: light/dark values are intentionally swapped from the original theme
+// definitions, per request — what used to render as the light square color
+// now renders on the dark squares, and vice versa.
 export const BOARD_THEMES: BoardTheme[] = [
-  { id: "forest", label: "Forest green", light: "#ebecd0", dark: "#6e9552", coord: "#2f5a25" },
-  { id: "ocean", label: "Ocean blue", light: "#e8edf1", dark: "#5f7f97", coord: "#1f3d52" },
-  { id: "walnut", label: "Walnut wood", light: "#f0d9b5", dark: "#b58863", coord: "#5a3a1c" },
-  { id: "slate", label: "Slate (dark)", light: "#4b4f57", dark: "#282b30", coord: "#d29922" },
+  { id: "forest", label: "Forest green", light: "#6e9552", dark: "#ebecd0", coord: "#2f5a25" },
+  { id: "ocean", label: "Ocean blue", light: "#5f7f97", dark: "#e8edf1", coord: "#1f3d52" },
+  { id: "walnut", label: "Walnut wood", light: "#b58863", dark: "#f0d9b5", coord: "#5a3a1c" },
+  { id: "slate", label: "Slate (dark)", light: "#282b30", dark: "#4b4f57", coord: "#d29922" },
 ];
 
 export type PieceShape = "glyph" | "letters" | "badge" | "icon";
