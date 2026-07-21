@@ -30,6 +30,35 @@ type Role = "w" | "b" | "spectator";
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
 
+// Reads the token stashed in the URL fragment (e.g. "#t=abc123"), if any.
+// The fragment is never sent to the server on navigation, so it survives
+// things like the page being reloaded from a bookmark, and gives us a
+// second, independent place to recover a player's identity from if
+// localStorage was cleared, is unavailable (private/incognito contexts
+// sometimes restrict it), or belongs to a different browser profile.
+function readTokenFromHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash;
+  if (!hash.startsWith("#t=")) return null;
+  return decodeURIComponent(hash.slice(3)) || null;
+}
+
+function writeTokenToHash(token: string) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.hash = `t=${encodeURIComponent(token)}`;
+  window.history.replaceState(null, "", url.toString());
+}
+
+// Builds a shareable invite link with any local token fragment stripped out,
+// so inviting an opponent can never accidentally hand them your own seat.
+function cleanInviteLink(): string {
+  if (typeof window === "undefined") return "";
+  const url = new URL(window.location.href);
+  url.hash = "";
+  return url.toString();
+}
+
 export default function GamePage() {
   const params = useParams<{ id: string }>();
   const gameId = params.id;
@@ -44,6 +73,12 @@ export default function GamePage() {
   const [copied, setCopied] = useState(false);
   const [boardThemeId, setBoardThemeId] = useState(BOARD_THEMES[0].id);
   const [pieceSetId, setPieceSetId] = useState(PIECE_SETS[0].id);
+  // Set when we expected to rejoin as a player (based on a saved token) but
+  // the server could not seat us and returned "spectator" instead. This is
+  // what actually happened to Ben's friend: the seat existed, but the
+  // client had no valid token to reclaim it, so the app quietly demoted
+  // them without saying why.
+  const [seatLost, setSeatLost] = useState<{ expected: "w" | "b" } | null>(null);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -69,13 +104,20 @@ export default function GamePage() {
   // Join (or resume) this game once on mount.
   useEffect(() => {
     if (!gameId) return;
+
     const stored = localStorage.getItem(`chess-${gameId}`);
     const storedParsed = stored ? (JSON.parse(stored) as { token: string; color: "w" | "b" }) : null;
+
+    // Prefer the URL fragment when present (it's what we just wrote after a
+    // successful join in this same tab), then fall back to localStorage.
+    const hashToken = readTokenFromHash();
+    const candidateToken = hashToken ?? storedParsed?.token ?? null;
+    const previouslyExpectedColor: "w" | "b" | null = storedParsed?.color ?? null;
 
     fetch(`/api/game/${gameId}/join`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: storedParsed?.token ?? null }),
+      body: JSON.stringify({ token: candidateToken }),
     })
       .then(async (res) => {
         if (res.status === 404) {
@@ -85,9 +127,25 @@ export default function GamePage() {
         const data = await res.json();
         setState(data.state);
         setRole(data.color);
-        setToken(data.token ?? storedParsed?.token ?? null);
-        if (data.token) {
-          localStorage.setItem(`chess-${gameId}`, JSON.stringify({ token: data.token, color: data.color }));
+
+        const resolvedToken: string | null = data.token ?? candidateToken;
+        setToken(resolvedToken);
+
+        // We had a token/color on file for this game and expected to be a
+        // player, but the server seated us as a spectator anyway -- that's
+        // the "lost seat" case. Surface it clearly instead of staying quiet.
+        if (data.color === "spectator" && previouslyExpectedColor) {
+          setSeatLost({ expected: previouslyExpectedColor });
+        } else {
+          setSeatLost(null);
+        }
+
+        if (resolvedToken) {
+          localStorage.setItem(
+            `chess-${gameId}`,
+            JSON.stringify({ token: resolvedToken, color: data.color }),
+          );
+          writeTokenToHash(resolvedToken);
         }
       })
       .catch(() => setError("Could not connect to the game."));
@@ -244,9 +302,10 @@ export default function GamePage() {
   const line = statusLine();
   const boardTheme = findBoardTheme(boardThemeId);
   const pieceSet = findPieceSet(pieceSetId);
+  const inviteLink = cleanInviteLink();
 
   function copyLink() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
+    navigator.clipboard.writeText(inviteLink).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -273,11 +332,34 @@ export default function GamePage() {
       <h1>Teleport Chess</h1>
       {error && <p className="error">{error}</p>}
 
+      {seatLost && (
+        <p
+          className="warning-banner"
+          role="alert"
+          style={{
+            background: "rgba(220, 38, 38, 0.12)",
+            border: "1px solid rgba(220, 38, 38, 0.4)",
+            color: "#fca5a5",
+            borderRadius: "8px",
+            padding: "0.75rem 1rem",
+            margin: "0.5rem 0 1rem",
+            fontSize: "0.9rem",
+            lineHeight: 1.4,
+          }}
+        >
+          ⚠️ Non è stato possibile ritrovare la tua sessione di gioco in questo browser — il posto{" "}
+          {seatLost.expected === "w" ? "Bianco" : "Nero"} risulta già occupato da un'altra sessione. Stai
+          visualizzando la partita come spettatore e non puoi muovere i pezzi. Se questo è il tuo posto, prova a
+          riaprire il link originale della partita sullo stesso dispositivo e browser con cui avevi iniziato a
+          giocare.
+        </p>
+      )}
+
       <div className="game-layout">
         <div className="board-col">
           {showInvite && (
             <div className="share-box">
-              <input readOnly value={typeof window !== "undefined" ? window.location.href : ""} />
+              <input readOnly value={inviteLink} />
               <button className="secondary" onClick={copyLink}>{copied ? "Copied" : "Copy link"}</button>
             </div>
           )}
